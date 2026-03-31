@@ -6,7 +6,7 @@ This repo has the full pipeline, EDA analysis, and the reasoning behind every de
 
 ---
 
-## The Problem in Plain English
+## The Problem
 
 Contact centers hire agents on schedules set days or weeks in advance. Get the forecast wrong and you're either burning budget on idle agents or watching customers hang up unanswered. Both hurt — but understaffing costs more in real-world penalties, which shaped how we built the model.
 
