@@ -23,6 +23,7 @@ from src.data_loader import load_data
 from src.shape      import build_shape
 from src.forecast   import build_forecast, format_submission
 from src.validate   import cross_check
+from src.model      import run_xgboost_forecast
 
 
 def parse_args():
@@ -43,11 +44,15 @@ def main():
     interval, daily = load_data(args.data)
 
     # build the intraday shape from Apr-Jun historical data
-    #this is the key step — it tells us how call volume spreads across the day
+    # this is the key step — it tells us how call volume spreads across the day
     shape = build_shape(interval)
 
-    #generate August predictions (daily totals × shape × bias)
-    fc = build_forecast(shape, daily)
+    # 1. Predict August daily call volumes using XGBoost
+    # 2. Perform July validation as part of the process
+    daily_pred, _ = run_xgboost_forecast(daily)
+
+    # generate August predictions (XGBoost daily totals × shape × bias)
+    fc = build_forecast(shape, daily_pred)
 
     #pivot to the wide submission format
     submission = format_submission(fc)

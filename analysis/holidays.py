@@ -12,13 +12,19 @@ import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
 
-HOLIDAYS = {
+from src.config import EXCLUDE_DATES
+
+# mapping for pretty labels in charts
+HOLIDAY_LABELS = {
     '2025-04-18': 'Good Friday',
     '2025-04-20': 'Easter Sunday',
     '2025-05-11': "Mother's Day",
     '2025-05-26': 'Memorial Day',
     '2025-06-15': "Father's Day",
     '2025-06-19': 'Juneteenth',
+    '2025-01-01': "New Year's",
+    '2024-12-25': "Christmas",
+    '2024-11-28': "Thanksgiving"
 }
 
 PLOT_DIR = 'plots/eda'
@@ -39,16 +45,16 @@ def analyse_holiday_impact(interval):
                ['Call_Volume'].sum().reset_index())
 
     # DOW baseline — median across *non-holiday* days
-    baseline = (daily[~daily['date_str'].isin(HOLIDAYS)]
+    baseline = (daily[~daily['date_str'].isin(EXCLUDE_DATES)]
                 .groupby(['Portfolio', 'day_of_week'])['Call_Volume']
                 .median().reset_index()
                 .rename(columns={'Call_Volume': 'baseline_cv'}))
 
-    holiday_rows = daily[daily['date_str'].isin(HOLIDAYS)].copy()
+    holiday_rows = daily[daily['date_str'].isin(EXCLUDE_DATES)].copy()
     holiday_rows = holiday_rows.merge(baseline, on=['Portfolio', 'day_of_week'])
     holiday_rows['pct_diff'] = (holiday_rows['Call_Volume'] - holiday_rows['baseline_cv']) \
                                / holiday_rows['baseline_cv'] * 100
-    holiday_rows['label'] = holiday_rows['date_str'].map(HOLIDAYS)
+    holiday_rows['label'] = holiday_rows['date_str'].map(HOLIDAY_LABELS).fillna('Holiday')
 
     # --- figure: % deviation from DOW baseline per queue ---
     fig, axes = plt.subplots(2, 2, figsize=(14, 8), sharey=True)
@@ -106,7 +112,8 @@ def plot_volume_timeline(interval):
         axes[i].plot(sub['Date'], sub['Call_Volume'], lw=1.2, color='#4472c4', label=q)
 
         # mark holiday dates
-        for date_str, name in HOLIDAYS.items():
+        for date_str in EXCLUDE_DATES:
+            name = HOLIDAY_LABELS.get(date_str, 'Holiday')
             dt = pd.to_datetime(date_str)
             row = sub[sub['Date'] == dt]
             if not row.empty:

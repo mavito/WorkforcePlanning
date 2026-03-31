@@ -31,15 +31,17 @@ What makes this hard isn't forecasting the daily total. That's manageable. The h
 
 Most teams approach this as a time-series forecasting problem — predict each interval autoregressively using lag features. We tried that first. It scored above 140 on the leaderboard because errors compound: each predicted interval feeds into the next, and you're 48 slots deep before the end of the day.
 
-The insight that changed everything: **we already know the daily totals for August.** That information is given. So the real question isn't "how many calls tomorrow?" — it's "what fraction of tomorrow's calls land in each 30-minute window?"
+The insight that changed everything: **we already know the daily totals for August.** Or rather, the task of forecasting a daily total is a much more stable problem than interval-level spikes.
 
-That reframing turned the problem into learning an **intraday shape** from historical data and multiplying:
+Our architecture uses a hybrid approach:
+1.  **Daily Forecasting**: A dedicated XGBoost model predicts the total volume for each day.
+2.  **Intraday Distribution**: A statistical "shape" (learned from historical data) distributes those daily totals across 48 intervals.
 
 ```
-interval_calls = daily_total × shape(queue, day_of_week, slot) × bias
+interval_calls = XGBoost_Daily_Total × shape(queue, day_of_week, slot) × bias
 ```
 
-No compounding. No autoregressive error propagation. The daily total is ground truth; we're only estimating the distribution.
+This hybrid design eliminates autoregressive error propagation while benefiting from modern gradient boosting for the top-level trend.
 
 ---
 
@@ -66,11 +68,12 @@ No model change. No new features. Just clean data.
 ├── requirements.txt
 │
 ├── src/                       # pipeline modules
-│   ├── config.py              # all constants (BIAS, CCT params, excluded dates)
+│   ├── config.py              # all constants (BIAS, holidays, tuning params)
 │   ├── data_loader.py         # read Excel sheets, normalise interval format
+│   ├── model.py               # XGBoost daily forecasting + Grid Search
 │   ├── utils.py               # trimmed_mean, smape, cyclic encoding, impute_nulls
-│   ├── shape.py               # build intraday shape + optional XGBoost refinement
-│   ├── forecast.py            # apply shape to August daily totals
+│   ├── shape.py               # build intraday shape (statistical baseline)
+│   ├── forecast.py            # apply shape to XGBoost predicted daily totals
 │   └── validate.py            # cross-check aggregated predictions vs actuals
 │
 ├── analysis/                  # EDA — every assumption in config.py has a plot here
@@ -146,15 +149,12 @@ rather than the mean of per-day fractions. High-volume days contribute proportio
 
 Raw ratio-of-sums shapes have slot-to-slot noise from small sample sizes (only ~60 Tuesdays across April-June). We smooth with a 5-element circular kernel `[0.10, 0.20, 0.40, 0.20, 0.10]`, treating the 48 slots as a ring so midnight wraps correctly. The smoothed shape is blended 50/50 with the raw shape (`SMOOTH_ALPHA=0.5`).
 
-### 3. XGBoost as a refinement layer (not a replacement)
+### 3. XGBoost Daily Forecasting with Grid Search
 
-`src/shape.py` has a full XGBoost model (`_xgb_refine_shape`) that learns residuals from the statistical shape using cyclic time features and portfolio dummies. It's there, it was evaluated, and it works. But at `blend_alpha=0.0` (the default), it isn't used — because once the training data was clean (post-imputation), the statistical shape was already within the noise floor of what XGBoost could correct.
+Instead of relying on simple averages, we use a dedicated XGBoost Regressor to predict the daily call volume for each queue.
 
-To experiment with blending:
-```python
-# in main.py
-shape = build_shape(interval, blend_alpha=0.3)  # 30% XGBoost, 70% statistical
-```
+- **Feature Engineering**: We utilize cyclic time encoding (sin/cos for DOW/Month) and seasonal lags (1, 7, 14, 28, and 364 days) to capture both short-term momentum and yearly cycles.
+- **Automated Tuning**: The pipeline includes an automated **Grid Search** step. It uses July 2025 as a validation set to find the optimal `max_depth`, `learning_rate`, and `n_estimators` for each specific queue before generating the August forecast.
 
 ### 4. CCT blending, not direct prediction
 
@@ -201,10 +201,10 @@ The one assumption that won't generalise without modification is the specific Ex
 |---|---|
 | `pandas` | Data manipulation throughout |
 | `numpy` | Shape arithmetic, smoothing |
-| `xgboost` | Optional shape refinement model |
+| `xgboost` | Core daily volume forecasting model |
+| `scikit-learn` | Hyperparameter Grid Search & metrics |
 | `matplotlib` + `seaborn` | EDA visualisations |
 | `openpyxl` | Reading the Excel data file |
-| `scikit-learn` | Not in the final model, available for extension |
 | `python-pptx` | Presentation generation |
 
 Full pinned versions in `requirements.txt`.

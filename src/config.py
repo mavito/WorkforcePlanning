@@ -10,17 +10,19 @@ QUEUES = ['A', 'B', 'C', 'D']
 # upward bias applied to call volume predictions
 # keeps us on the safe side of overstaffing vs understaffing,
 # since understaffing is penalised more heavily in scoring
-BIAS = {'A': 1.044, 'B': 1.044, 'C': 1.044, 'D': 1.044}
+#BIAS = {'A': 1.044, 'B': 1.044, 'C': 1.044, 'D': 1.044} # best scored version
+BIAS = {'A': 1.0, 'B': 1.0, 'C': 1.0, 'D': 1.0}
 
-# known holidays in Apr-Jun 2025 that pull volume well below typical levels
-# leaving these in would make e.g. every "Monday" pattern look lighter than it is
+# expanded holiday list for 2024-2025 to improve model training
+# these days typically have significantly lower call volume
 EXCLUDE_DATES = {
-    '2025-04-18',  # Good Friday
-    '2025-04-20',  # Easter Sunday
-    '2025-05-11',  # Mother's Day
-    '2025-05-26',  # Memorial Day
-    '2025-06-15',  # Father's Day
-    '2025-06-19',  # Juneteenth, tried skipping this one and it didn't help
+    # 2024
+    '2024-01-01', '2024-01-15', '2024-03-31', '2024-05-27', '2024-06-19',
+    '2024-07-04', '2024-09-02', '2024-11-28', '2024-12-25',
+    # 2025
+    '2025-01-01', '2025-01-20', '2025-04-18', '2025-04-20', '2025-05-11',
+    '2025-05-26', '2025-06-15', '2025-06-19', '2025-07-04', '2025-09-01',
+    '2025-11-27', '2025-12-25'
 }
 
 # circular kernel for smoothing the call volume shape across intervals
